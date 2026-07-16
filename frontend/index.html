@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CDR/IPDR Analysis Platform</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/styles.css?v=2">
+    <!-- Cytoscape for Graph Visualization -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.26.0/cytoscape.min.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar">
+            <div class="logo-container">
+                <div class="logo"></div>
+                <h2>DataSense</h2>
+            </div>
+            <ul class="nav-links">
+                <li class="active"><a href="#" data-target="dashboard">Dashboard</a></li>
+                
+                <li class="dropdown" style="margin-top: 10px;">
+                    <a href="#" class="dropdown-toggle" style="font-weight: bold;">CDR Analysis <span class="arrow" style="font-size: 0.8em; margin-left: 5px;">▼</span></a>
+                    <ul class="dropdown-menu" style="display: none; padding-left: 1rem; list-style: none; margin-top: 5px; gap: 5px; display: flex; flex-direction: column;">
+                        <li><a href="#" data-target="ingestion" data-type="cdr">Ingestion</a></li>
+                        <li><a href="#" data-target="graph" data-type="cdr">Network Graph</a></li>
+                        <li><a href="#" data-target="timeline" data-type="cdr">Timeline</a></li>
+                        <li><a href="#" data-target="reports" data-type="cdr">Reports</a></li>
+                    </ul>
+                </li>
+                
+                <li class="dropdown" style="margin-top: 10px;">
+                    <a href="#" class="dropdown-toggle" style="font-weight: bold;">IPDR Analysis <span class="arrow" style="font-size: 0.8em; margin-left: 5px;">▼</span></a>
+                    <ul class="dropdown-menu" style="display: none; padding-left: 1rem; list-style: none; margin-top: 5px; gap: 5px; display: flex; flex-direction: column;">
+                        <li><a href="#" data-target="ingestion" data-type="ipdr">Ingestion</a></li>
+                        <li><a href="#" data-target="graph" data-type="ipdr">Network Graph</a></li>
+                        <li><a href="#" data-target="timeline" data-type="ipdr">Timeline</a></li>
+                        <li><a href="#" data-target="reports" data-type="ipdr">Reports</a></li>
+                    </ul>
+                </li>
+            </ul>
+            <div class="sidebar-footer">
+                <p>v1.0.0 Draft</p>
+            </div>
+        </nav>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <header class="topbar">
+                <h1>CDR/IPDR Investigation Dashboard</h1>
+                <div class="user-profile">Investigator</div>
+            </header>
+
+            <div class="dashboard-grid">
+                <!-- Filters Section -->
+                <section class="card filters-card glassmorphism" id="card-filters" style="grid-column: 1 / -1; display: none;">
+                    <div style="display: flex; gap: 1rem; align-items: flex-end;">
+                        <div>
+                            <label for="start-date" style="display: block; font-size: 0.8rem; margin-bottom: 0.5rem;">Start Date</label>
+                            <input type="date" id="start-date" class="form-control" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 0.5rem; border-radius: 4px; color-scheme: dark;">
+                        </div>
+                        <div>
+                            <label for="end-date" style="display: block; font-size: 0.8rem; margin-bottom: 0.5rem;">End Date</label>
+                            <input type="date" id="end-date" class="form-control" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 0.5rem; border-radius: 4px; color-scheme: dark;">
+                        </div>
+                        <div>
+                            <button id="apply-filters-btn" class="btn-primary">Apply Filters</button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Upload Section -->
+                <section class="card upload-card glassmorphism" id="card-ingestion" style="display: none;">
+                    <h3>Data Ingestion</h3>
+                    <p>Upload operator CSV/Excel exports to normalize into the unified schema.</p>
+                    <div class="upload-zone" id="upload-zone">
+                        <input type="file" id="file-input" accept=".csv" hidden />
+                        <button class="btn-primary" onclick="document.getElementById('file-input').click()">
+                            Select CSV File
+                        </button>
+                        <p id="file-name">No file chosen</p>
+                        <button class="btn-secondary" id="upload-btn" disabled>Upload & Normalize</button>
+                    </div>
+                    <div id="upload-status" class="status-message"></div>
+                </section>
+
+                <!-- Data Analysis Section (Aggregations) -->
+                <section class="card analysis-card glassmorphism" id="card-analysis" style="grid-column: 1 / -1; display: none;">
+                    <h3>Data Analysis</h3>
+                    <div style="display: flex; gap: 1rem;">
+                        <div style="flex: 1; max-height: 400px; overflow-y: auto; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;">
+                            <table style="width: 100%; border-collapse: collapse;">
+                                <thead>
+                                    <tr>
+                                        <th style="text-align: left; padding: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.2);" id="analysis-header-entity">Phone Number</th>
+                                        <th style="text-align: left; padding: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.2);">Total Calls/Sessions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="aggregation-tbody">
+                                    <tr><td colspan="2" style="padding: 1rem; text-align: center; color: #94a3b8;">No data available</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div id="details-panel" style="flex: 1; padding: 1rem; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; background: rgba(0,0,0,0.2);">
+                            <h4 style="margin-top: 0;">Details</h4>
+                            <p style="color: #94a3b8;">Select a phone number to view details.</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Stats Section -->
+                <section class="card stats-card glassmorphism" id="card-stats">
+                    <h3>Case Statistics</h3>
+                    <div class="stats-grid">
+                        <div class="stat-box">
+                            <span class="stat-value" id="stat-cdrs">0</span>
+                            <span class="stat-label">Total CDRs</span>
+                        </div>
+                        <div class="stat-box">
+                            <span class="stat-value" id="stat-nodes">0</span>
+                            <span class="stat-label">Unique Entities</span>
+                        </div>
+                    </div>
+                </section>
+                
+                <!-- Graph Visualization Placeholder -->
+                <section class="card graph-card glassmorphism" id="card-graph">
+                    <h3>Entity Interaction Graph</h3>
+                    <div id="cy-container" class="graph-container"></div>
+                </section>
+
+                <!-- Timeline Section -->
+                <section class="card timeline-card glassmorphism" id="card-timeline" style="grid-column: span 2; display: none;">
+                    <h3>Investigation Timeline</h3>
+                    <p>Chronological sequence of events will appear here.</p>
+                    <div style="min-height: 200px; display:flex; align-items:center; justify-content:center; border: 1px dashed rgba(255,255,255,0.1); border-radius: 8px;">
+                        <span style="color: #94a3b8;">No timeline events generated yet.</span>
+                    </div>
+                </section>
+
+                <!-- Reports Section -->
+                <section class="card reports-card glassmorphism" id="card-reports" style="grid-column: span 2; display: none;">
+                    <h3>Automated Reports</h3>
+                    <p>Generate analytical summaries based on ingested records.</p>
+                    <div style="min-height: 200px; display:flex; align-items:center; justify-content:center; border: 1px dashed rgba(255,255,255,0.1); border-radius: 8px;">
+                        <button class="btn-primary" id="generate-report-btn">Generate PDF Report</button>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+    
+    <script src="/static/app.js?v=3"></script>
+</body>
+</html>
