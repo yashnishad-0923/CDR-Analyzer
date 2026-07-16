@@ -5,8 +5,12 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import os
 from api.routes import router as api_router
+from models.database import init_db
 
 app = FastAPI(title="CDR/IPDR Analysis Platform", version="1.0")
+
+# Initialize database
+init_db()
 
 # Configure CORS for frontend access
 app.add_middleware(

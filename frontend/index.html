@@ -5,18 +5,50 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CDR/IPDR Analysis Platform</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/styles.css?v=2">
+    <link rel="stylesheet" href="/static/styles.css?v=4">
     <!-- Cytoscape for Graph Visualization -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.26.0/cytoscape.min.js"></script>
+    <!-- Chart.js for Behavior Profile -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Leaflet for Movement Map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body>
     <div class="app-container">
+        
+        <!-- Case List Overlay -->
+        <div id="case-selection-overlay" class="case-overlay">
+            <div class="case-modal glassmorphism">
+                <h2>Select or Create Case</h2>
+                <div style="margin: 1rem 0;">
+                    <button class="btn-primary" onclick="document.getElementById('create-case-form').style.display='block'">+ New Case</button>
+                </div>
+                <div id="create-case-form" style="display: none; margin-bottom: 1rem; border: 1px solid rgba(255,255,255,0.1); padding: 1rem; border-radius: 8px;">
+                    <input type="text" id="new-case-name" placeholder="Case Name (e.g. Operation Alpha)" class="form-control mb-2" style="width: 100%; padding: 0.5rem;">
+                    <input type="text" id="new-case-number" placeholder="Case Number (FIR / ID)" class="form-control mb-2" style="width: 100%; padding: 0.5rem; margin-top:0.5rem;">
+                    <button class="btn-primary" id="submit-new-case-btn" style="margin-top:0.5rem;">Create Case</button>
+                </div>
+                <div class="case-grid" id="case-grid">
+                    <!-- Case cards injected here -->
+                </div>
+            </div>
+        </div>
+
         <!-- Sidebar Navigation -->
-        <nav class="sidebar">
+        <nav class="sidebar" id="main-sidebar" style="display:none;">
             <div class="logo-container">
                 <div class="logo"></div>
                 <h2>DataSense</h2>
             </div>
+            
+            <div id="active-case-info" style="margin-bottom: 2rem; padding: 1rem; background: rgba(255,255,255,0.05); border-radius: 8px; border: 1px solid rgba(59, 130, 246, 0.3);">
+                <span style="font-size: 0.75rem; color: #94a3b8; text-transform: uppercase;">Current Case</span>
+                <div id="sidebar-case-name" style="font-weight: bold; color: #fff; margin-top: 0.25rem;"></div>
+                <div id="sidebar-case-number" style="font-size: 0.8rem; color: #94a3b8; margin-top: 0.25rem;"></div>
+                <button class="btn-secondary" style="font-size: 0.7rem; padding: 0.25rem 0.5rem; margin-top: 0.5rem; width: 100%;" onclick="location.reload()">Switch Case</button>
+            </div>
+
             <ul class="nav-links">
                 <li class="active"><a href="#" data-target="dashboard">Dashboard</a></li>
                 
@@ -25,7 +57,6 @@
                     <ul class="dropdown-menu" style="display: none; padding-left: 1rem; list-style: none; margin-top: 5px; gap: 5px; display: flex; flex-direction: column;">
                         <li><a href="#" data-target="ingestion" data-type="cdr">Ingestion</a></li>
                         <li><a href="#" data-target="graph" data-type="cdr">Network Graph</a></li>
-                        <li><a href="#" data-target="timeline" data-type="cdr">Timeline</a></li>
                         <li><a href="#" data-target="reports" data-type="cdr">Reports</a></li>
                     </ul>
                 </li>
@@ -35,34 +66,57 @@
                     <ul class="dropdown-menu" style="display: none; padding-left: 1rem; list-style: none; margin-top: 5px; gap: 5px; display: flex; flex-direction: column;">
                         <li><a href="#" data-target="ingestion" data-type="ipdr">Ingestion</a></li>
                         <li><a href="#" data-target="graph" data-type="ipdr">Network Graph</a></li>
-                        <li><a href="#" data-target="timeline" data-type="ipdr">Timeline</a></li>
                         <li><a href="#" data-target="reports" data-type="ipdr">Reports</a></li>
+                    </ul>
+                </li>
+
+                <li class="dropdown" style="margin-top: 10px;">
+                    <a href="#" class="dropdown-toggle" style="font-weight: bold; color: #8b5cf6;">Advanced Tools <span class="arrow" style="font-size: 0.8em; margin-left: 5px;">▼</span></a>
+                    <ul class="dropdown-menu" style="display: none; padding-left: 1rem; list-style: none; margin-top: 5px; gap: 5px; display: flex; flex-direction: column;">
+                        <li><a href="#" data-target="evidence">Chain of Custody</a></li>
+                        <li><a href="#" data-target="anomalies">Anomalies</a></li>
+                        <li><a href="#" data-target="profile">Behavior Profile</a></li>
+                        <li><a href="#" data-target="correlation">CDR↔IPDR Sync</a></li>
+                        <li><a href="#" data-target="intersect">Triangulation</a></li>
+                        <li><a href="#" data-target="query">Smart Query</a></li>
                     </ul>
                 </li>
             </ul>
             <div class="sidebar-footer">
-                <p>v1.0.0 Draft</p>
+                <p>v2.0 Case Management</p>
             </div>
         </nav>
 
         <!-- Main Content Area -->
-        <main class="main-content">
+        <main class="main-content" id="main-content" style="display:none;">
             <header class="topbar">
-                <h1>CDR/IPDR Investigation Dashboard</h1>
-                <div class="user-profile">Investigator</div>
+                <h1>Investigation Dashboard</h1>
+                <div style="display: flex; gap: 1rem; align-items: center;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <label for="global-timezone" style="font-size: 0.8rem; color: var(--text-secondary);">Display TZ:</label>
+                        <select id="global-timezone" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 0.25rem 0.5rem; border-radius: 4px;">
+                            <option value="UTC">UTC</option>
+                            <option value="Asia/Kolkata">IST (Asia/Kolkata)</option>
+                            <option value="America/New_York">EST (America/New_York)</option>
+                            <option value="Europe/London">GMT (Europe/London)</option>
+                        </select>
+                    </div>
+                    <div class="user-profile">Investigator</div>
+                </div>
             </header>
 
             <div class="dashboard-grid">
+                
                 <!-- Filters Section -->
                 <section class="card filters-card glassmorphism" id="card-filters" style="grid-column: 1 / -1; display: none;">
                     <div style="display: flex; gap: 1rem; align-items: flex-end;">
                         <div>
                             <label for="start-date" style="display: block; font-size: 0.8rem; margin-bottom: 0.5rem;">Start Date</label>
-                            <input type="date" id="start-date" class="form-control" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 0.5rem; border-radius: 4px; color-scheme: dark;">
+                            <input type="datetime-local" id="start-date" class="form-control" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 0.5rem; border-radius: 4px; color-scheme: dark;">
                         </div>
                         <div>
                             <label for="end-date" style="display: block; font-size: 0.8rem; margin-bottom: 0.5rem;">End Date</label>
-                            <input type="date" id="end-date" class="form-control" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 0.5rem; border-radius: 4px; color-scheme: dark;">
+                            <input type="datetime-local" id="end-date" class="form-control" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 0.5rem; border-radius: 4px; color-scheme: dark;">
                         </div>
                         <div>
                             <button id="apply-filters-btn" class="btn-primary">Apply Filters</button>
@@ -73,7 +127,17 @@
                 <!-- Upload Section -->
                 <section class="card upload-card glassmorphism" id="card-ingestion" style="display: none;">
                     <h3>Data Ingestion</h3>
-                    <p>Upload operator CSV/Excel exports to normalize into the unified schema.</p>
+                    <p>Upload operator exports for <span id="ingestion-type-label" style="font-weight: bold; color: var(--accent-blue);">CDR</span>.</p>
+                    
+                    <div style="margin-bottom: 1rem;">
+                        <label for="upload-timezone" style="display: block; font-size: 0.8rem; margin-bottom: 0.25rem;">Source Timezone (if not in CSV)</label>
+                        <select id="upload-timezone" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 0.5rem; border-radius: 4px; width: 100%;">
+                            <option value="UTC">UTC (Default)</option>
+                            <option value="Asia/Kolkata">IST (Asia/Kolkata)</option>
+                            <option value="America/New_York">EST (America/New_York)</option>
+                        </select>
+                    </div>
+
                     <div class="upload-zone" id="upload-zone">
                         <input type="file" id="file-input" accept=".csv" hidden />
                         <button class="btn-primary" onclick="document.getElementById('file-input').click()">
@@ -85,7 +149,7 @@
                     <div id="upload-status" class="status-message"></div>
                 </section>
 
-                <!-- Data Analysis Section (Aggregations) -->
+                <!-- Data Analysis Section -->
                 <section class="card analysis-card glassmorphism" id="card-analysis" style="grid-column: 1 / -1; display: none;">
                     <h3>Data Analysis</h3>
                     <div style="display: flex; gap: 1rem;">
@@ -93,8 +157,8 @@
                             <table style="width: 100%; border-collapse: collapse;">
                                 <thead>
                                     <tr>
-                                        <th style="text-align: left; padding: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.2);" id="analysis-header-entity">Phone Number</th>
-                                        <th style="text-align: left; padding: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.2);">Total Calls/Sessions</th>
+                                        <th style="text-align: left; padding: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.2);" id="analysis-header-entity">Entity</th>
+                                        <th style="text-align: left; padding: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.2);">Total Interactions</th>
                                     </tr>
                                 </thead>
                                 <tbody id="aggregation-tbody">
@@ -104,7 +168,7 @@
                         </div>
                         <div id="details-panel" style="flex: 1; padding: 1rem; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; background: rgba(0,0,0,0.2);">
                             <h4 style="margin-top: 0;">Details</h4>
-                            <p style="color: #94a3b8;">Select a phone number to view details.</p>
+                            <p style="color: #94a3b8;">Select an entity to view details.</p>
                         </div>
                     </div>
                 </section>
@@ -115,7 +179,7 @@
                     <div class="stats-grid">
                         <div class="stat-box">
                             <span class="stat-value" id="stat-cdrs">0</span>
-                            <span class="stat-label">Total CDRs</span>
+                            <span class="stat-label">Total Records</span>
                         </div>
                         <div class="stat-box">
                             <span class="stat-value" id="stat-nodes">0</span>
@@ -124,33 +188,127 @@
                     </div>
                 </section>
                 
-                <!-- Graph Visualization Placeholder -->
+                <!-- Graph Visualization -->
                 <section class="card graph-card glassmorphism" id="card-graph">
                     <h3>Entity Interaction Graph</h3>
                     <div id="cy-container" class="graph-container"></div>
                 </section>
 
-                <!-- Timeline Section -->
-                <section class="card timeline-card glassmorphism" id="card-timeline" style="grid-column: span 2; display: none;">
-                    <h3>Investigation Timeline</h3>
-                    <p>Chronological sequence of events will appear here.</p>
-                    <div style="min-height: 200px; display:flex; align-items:center; justify-content:center; border: 1px dashed rgba(255,255,255,0.1); border-radius: 8px;">
-                        <span style="color: #94a3b8;">No timeline events generated yet.</span>
-                    </div>
-                </section>
-
                 <!-- Reports Section -->
                 <section class="card reports-card glassmorphism" id="card-reports" style="grid-column: span 2; display: none;">
                     <h3>Automated Reports</h3>
-                    <p>Generate analytical summaries based on ingested records.</p>
-                    <div style="min-height: 200px; display:flex; align-items:center; justify-content:center; border: 1px dashed rgba(255,255,255,0.1); border-radius: 8px;">
-                        <button class="btn-primary" id="generate-report-btn">Generate PDF Report</button>
+                    <p>Generate analytical summaries based on ingested records for this case.</p>
+                    <div style="min-height: 200px; display:flex; gap: 1rem; align-items:center; justify-content:center; border: 1px dashed rgba(255,255,255,0.1); border-radius: 8px;">
+                        <button class="btn-primary" id="generate-cdr-report-btn">Generate CDR Report (PDF)</button>
+                        <button class="btn-primary" id="generate-ipdr-report-btn" style="background: linear-gradient(135deg, var(--accent-purple), #a78bfa);">Generate IPDR Report (PDF)</button>
                     </div>
                 </section>
+
+                <!-- ADVANCED: Evidence & Custody -->
+                <section class="card glassmorphism" id="card-evidence" style="grid-column: span 2; display: none;">
+                    <h3>Chain of Custody Log</h3>
+                    <div style="max-height: 400px; overflow-y: auto;">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+                            <thead>
+                                <tr>
+                                    <th style="text-align: left; padding: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.2);">Timestamp</th>
+                                    <th style="text-align: left; padding: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.2);">Action</th>
+                                    <th style="text-align: left; padding: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.2);">File/Hash</th>
+                                    <th style="text-align: left; padding: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.2);">User</th>
+                                </tr>
+                            </thead>
+                            <tbody id="custody-log-tbody">
+                                <tr><td colspan="4" style="padding: 1rem; text-align: center; color: #94a3b8;">No logs</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- ADVANCED: Anomalies -->
+                <section class="card glassmorphism" id="card-anomalies" style="grid-column: span 2; display: none;">
+                    <h3>Detected Anomalies</h3>
+                    <div id="anomalies-container" style="display: flex; flex-direction: column; gap: 1rem;">
+                        <p style="color: #94a3b8;">No anomalies detected.</p>
+                    </div>
+                </section>
+
+                <!-- ADVANCED: Behavior Profile -->
+                <section class="card glassmorphism" id="card-profile" style="grid-column: span 2; display: none;">
+                    <h3>Statistical Behavior Profile</h3>
+                    <div style="display: flex; gap: 1rem; align-items: flex-end; margin-bottom: 1rem;">
+                        <div>
+                            <label style="display: block; font-size: 0.8rem; margin-bottom: 0.5rem;">Subject Number/IP</label>
+                            <input type="text" id="profile-subject-input" class="form-control" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 0.5rem; border-radius: 4px;">
+                        </div>
+                        <button class="btn-primary" id="btn-load-profile">Analyze</button>
+                    </div>
+                    <div id="profile-results" style="display:none;">
+                        <div class="stats-grid" style="margin-bottom: 1rem;">
+                            <div class="stat-box" style="padding: 1rem;">
+                                <span class="stat-value" id="prof-odd-hours" style="font-size: 2rem;">0%</span>
+                                <span class="stat-label">Odd Hours Activity</span>
+                            </div>
+                            <div class="stat-box" style="padding: 1rem;">
+                                <span class="stat-value" id="prof-avg-dur" style="font-size: 2rem;">0s</span>
+                                <span class="stat-label">Avg Duration</span>
+                            </div>
+                        </div>
+                        <div style="height: 300px; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 1rem;">
+                            <canvas id="profileChart"></canvas>
+                        </div>
+                    </div>
+                </section>
+                
+                <!-- ADVANCED: Correlation -->
+                <section class="card glassmorphism" id="card-correlation" style="grid-column: span 2; display: none;">
+                    <h3>CDR ↔ IPDR Correlation</h3>
+                    <div style="display: flex; gap: 1rem; align-items: flex-end; margin-bottom: 1rem;">
+                        <div>
+                            <label style="display: block; font-size: 0.8rem; margin-bottom: 0.5rem;">Subject Entity</label>
+                            <input type="text" id="corr-subject-input" class="form-control" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 0.5rem; border-radius: 4px;">
+                        </div>
+                        <button class="btn-primary" id="btn-load-corr">Correlate</button>
+                    </div>
+                    <div id="corr-results" style="display:none; text-align:center;">
+                        <div style="font-size: 3rem; font-weight: 800; color: #10b981; margin: 1rem 0;" id="corr-pct">0%</div>
+                        <p>of voice calls occurred during an active IPDR session.</p>
+                        <div id="corr-timeline" style="margin-top: 1rem; max-height: 200px; overflow-y: auto; text-align: left; font-size: 0.9rem; background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 8px;">
+                        </div>
+                    </div>
+                </section>
+
+                <!-- ADVANCED: Intersect -->
+                <section class="card glassmorphism" id="card-intersect" style="grid-column: span 2; display: none;">
+                    <h3>Common Contact Triangulation</h3>
+                    <p>Enter 2 or more subjects (comma separated) to find common contacts.</p>
+                    <div style="display: flex; gap: 1rem; align-items: flex-end; margin-bottom: 1rem;">
+                        <div style="flex: 1;">
+                            <input type="text" id="intersect-subjects-input" placeholder="e.g. 1234567890, 0987654321" class="form-control" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 0.5rem; border-radius: 4px; width: 100%;">
+                        </div>
+                        <button class="btn-primary" id="btn-load-intersect">Triangulate</button>
+                    </div>
+                    <div id="intersect-results" style="padding: 1rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+                        <p style="color: #94a3b8;">Results will appear here.</p>
+                    </div>
+                </section>
+
+                <!-- ADVANCED: Query Builder -->
+                <section class="card glassmorphism" id="card-query" style="grid-column: span 2; display: none;">
+                    <h3>Smart Query Builder</h3>
+                    <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem;">
+                        <input type="text" id="q-subject" placeholder="Subject (Optional)" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 0.5rem; border-radius: 4px;">
+                        <input type="datetime-local" id="q-start" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 0.5rem; border-radius: 4px; color-scheme: dark;">
+                        <input type="datetime-local" id="q-end" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 0.5rem; border-radius: 4px; color-scheme: dark;">
+                        <button class="btn-primary" id="btn-run-query">Search</button>
+                    </div>
+                    <div id="q-results-table" style="max-height: 300px; overflow-y: auto; background: rgba(0,0,0,0.2); border-radius: 8px;">
+                    </div>
+                </section>
+
             </div>
         </main>
     </div>
     
-    <script src="/static/app.js?v=3"></script>
+    <script src="/static/app.js?v=4"></script>
 </body>
 </html>
