@@ -25,7 +25,6 @@ class Case(Base):
     notes = Column(String)
 
     cdrs = relationship("CDRRecordDB", back_populates="case")
-    ipdrs = relationship("IPDRRecordDB", back_populates="case")
     evidence_logs = relationship("EvidenceLog", back_populates="case")
     anomaly_flags = relationship("AnomalyFlag", back_populates="case")
 
@@ -34,41 +33,25 @@ class CDRRecordDB(Base):
     id = Column(Integer, primary_key=True, index=True)
     case_id = Column(Integer, ForeignKey("cases.id"))
     subject_id = Column(String, index=True)
-    event_type = Column(String)
+    event_type = Column(String)          # voice / sms
+    direction = Column(String, nullable=True)   # incoming / outgoing / sms-mo / sms-mt
     caller = Column(String, index=True)
     callee = Column(String, index=True)
     start_time = Column(DateTime, index=True)
+    end_time = Column(DateTime, nullable=True)
     duration = Column(Integer)
-    cell_id = Column(String, index=True, nullable=True)
+    cell_id = Column(String, index=True, nullable=True)       # first cell id
+    last_cell_id = Column(String, index=True, nullable=True)  # last cell id (handover)
     imei = Column(String, index=True, nullable=True)
     imsi = Column(String, index=True, nullable=True)
     operator = Column(String, nullable=True)
+    roaming_center = Column(String, nullable=True)   # MSC / location signal
     source_timezone = Column(String, nullable=True)
     normalized_time = Column(DateTime, index=True)
 
     case = relationship("Case", back_populates="cdrs")
 
-class IPDRRecordDB(Base):
-    __tablename__ = "ipdrs"
-    id = Column(Integer, primary_key=True, index=True)
-    case_id = Column(Integer, ForeignKey("cases.id"))
-    subject_id = Column(String, index=True)
-    session_start = Column(DateTime, index=True)
-    session_end = Column(DateTime, index=True)
-    source_ip = Column(String, index=True)
-    source_port = Column(Integer)
-    dest_ip = Column(String, index=True)
-    dest_port = Column(Integer)
-    protocol = Column(String)
-    apn = Column(String, nullable=True)
-    data_volume_up = Column(Integer, default=0)
-    data_volume_down = Column(Integer, default=0)
-    nat_translation_ref = Column(String, nullable=True)
-    source_timezone = Column(String, nullable=True)
-    normalized_session_start = Column(DateTime, index=True)
-    normalized_session_end = Column(DateTime, index=True)
 
-    case = relationship("Case", back_populates="ipdrs")
 
 class EvidenceLog(Base):
     __tablename__ = "evidence_logs"
@@ -82,6 +65,18 @@ class EvidenceLog(Base):
     action = Column(String)  # "uploaded", "viewed", "exported", "report_generated"
 
     case = relationship("Case", back_populates="evidence_logs")
+
+class CellTower(Base):
+    __tablename__ = "cell_towers"
+    id = Column(Integer, primary_key=True, index=True)
+    case_id = Column(Integer, ForeignKey("cases.id"))
+    cell_id = Column(String, index=True)
+    latitude = Column(Float)
+    longitude = Column(Float)
+    operator = Column(String, nullable=True)
+    address = Column(String, nullable=True)
+    source = Column(String, nullable=True)      # "reference_csv" / "opencellid" / "roaming_centroid"
+    confidence = Column(String, nullable=True)  # high / medium / low
 
 class AnomalyFlag(Base):
     __tablename__ = "anomaly_flags"
@@ -99,6 +94,58 @@ class AnomalyFlag(Base):
 
 def init_db():
     Base.metadata.create_all(bind=engine)
+    _run_lightweight_migrations()
+
+
+def _run_lightweight_migrations():
+    """Add columns introduced after the initial schema to pre-existing SQLite
+    databases. SQLAlchemy's create_all never ALTERs existing tables, so we do
+    it manually and idempotently."""
+    from sqlalchemy import text
+    new_columns = {
+        "cdrs": {
+            "direction": "VARCHAR",
+            "end_time": "DATETIME",
+            "last_cell_id": "VARCHAR",
+            "roaming_center": "VARCHAR",
+        },
+        "cell_towers": {
+            "source": "VARCHAR",
+            "confidence": "VARCHAR",
+        },
+    }
+    with engine.begin() as conn:
+        for table, cols in new_columns.items():
+            try:
+                existing = {row[1] for row in conn.execute(text(f"PRAGMA table_info({table})"))}
+            except Exception:
+                continue
+            for col, col_type in cols.items():
+                if col not in existing:
+                    try:
+                        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}"))
+                    except Exception:
+                        pass
+
+    _repair_float_artifacts()
+
+
+def _repair_float_artifacts():
+    """Older uploads stored IMSI/IMEI/cell IDs that pandas widened to float,
+    leaving a trailing '.0' (e.g. '404459000000000.0'). Strip it in place so
+    operator/IMEI lookups work without a re-upload. Idempotent."""
+    from sqlalchemy import text
+    id_cols = ["imsi", "imei", "cell_id", "last_cell_id", "caller", "callee"]
+    try:
+        with engine.begin() as conn:
+            for col in id_cols:
+                conn.execute(text(
+                    f"UPDATE cdrs SET {col} = substr({col}, 1, length({col}) - 2) "
+                    f"WHERE {col} LIKE '%.0' AND substr({col}, 1, length({col}) - 2) GLOB '[0-9]*'"
+                ))
+    except Exception:
+        pass
+
 
 def get_db():
     db = SessionLocal()

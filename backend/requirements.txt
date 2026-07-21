@@ -1,6 +1,7 @@
 fastapi
 uvicorn
 pandas
+numpy
 pydantic
 networkx
 python-multipart

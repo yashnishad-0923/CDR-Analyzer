@@ -38,27 +38,7 @@ class CDRRecord(BaseModel):
     class Config:
         from_attributes = True
 
-class IPDRRecord(BaseModel):
-    id: Optional[int] = None
-    case_id: Optional[int] = None
-    subject_id: str
-    session_start: datetime
-    session_end: datetime
-    source_ip: str
-    source_port: int
-    dest_ip: str
-    dest_port: int
-    protocol: str
-    apn: Optional[str] = None
-    data_volume_up: Optional[int] = 0
-    data_volume_down: Optional[int] = 0
-    nat_translation_ref: Optional[str] = None
-    source_timezone: Optional[str] = None
-    normalized_session_start: Optional[datetime] = None
-    normalized_session_end: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
 
 class EvidenceLogResponse(BaseModel):
     id: int
@@ -71,7 +51,7 @@ class EvidenceLogResponse(BaseModel):
     action: str
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class AnomalyResponse(BaseModel):
     id: int
@@ -85,7 +65,7 @@ class AnomalyResponse(BaseModel):
     confidence: Optional[str] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class CellTower(BaseModel):
     cell_id: str

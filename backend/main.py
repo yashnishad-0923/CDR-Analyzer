@@ -7,7 +7,7 @@ import os
 from api.routes import router as api_router
 from models.database import init_db
 
-app = FastAPI(title="CDR/IPDR Analysis Platform", version="1.0")
+app = FastAPI(title="CDR Analysis Platform", version="1.0")
 
 # Initialize database
 init_db()
